@@ -9,6 +9,7 @@ let recording = false;
 let recordingStartTime = 0;
 let donecount = 0;
 let startAt = 0;
+let bpmMultiplier = 1.2;
 
 let drumSnareHits = [];
 let drumBassHits = [];
@@ -42,7 +43,7 @@ wss.on('connection', (ws) => {
       const serverTime = Date.now();
 
       // Identify host
-      if (data.type === "start" || data.type === "stop" || data.type === "reset" || data.type === "replay-request") {
+      if (data.type === "start" || data.type === "stop" || data.type === "reset" || data.type === "replay-request" || data.type === "play-sample") {
         hostSocket = ws;
 
         if (data.type === "start") {
@@ -52,6 +53,7 @@ wss.on('connection', (ws) => {
 
           const delay = 3000;
           startAt = Date.now() + delay;
+          bpmMultiplier = data.multiplier;
 
           broadcastExceptHost({
             type: "startAt",
@@ -70,7 +72,7 @@ wss.on('connection', (ws) => {
             cur++;
           }
           for (var i = 0; i < drumSnareAns.length; i++){// traverse through all the 
-            let lbound = drumSnareAns[i] - 62, rbound = drumSnareAns[i] + 62;
+            let lbound = drumSnareAns[i] * bpmMultiplier - 62 * bpmMultiplier, rbound = drumSnareAns[i] * bpmMultiplier + 62 * bpmMultiplier;
             while(cur < drumSnareHits.length && drumSnareHits[cur] < lbound){// passes all hits that are before lbound
               cur++;
               wrong_spaces++;
@@ -83,11 +85,11 @@ wss.on('connection', (ws) => {
               r++;
             }
             if(r - l === 1){// if only one note exists in the interval
-              snareScore += 7;
+              snareScore += 9;
             }
             cur = r;// moves cur to next possible position
           }
-          snareScore -= wrong_spaces * 2;
+          //snareScore -= wrong_spaces * 2;
           score += Math.max(0, snareScore);
 
           // bass
@@ -96,7 +98,7 @@ wss.on('connection', (ws) => {
             cur++;
           }
           for (var i = 0; i < drumBassAns.length; i++){// traverse through all the 
-            let lbound = drumBassAns[i] - 62, rbound = drumBassAns[i] + 62;
+            let lbound = drumBassAns[i] * bpmMultiplier - 62 * bpmMultiplier, rbound = drumBassAns[i] * bpmMultiplier + 62 * bpmMultiplier;
             while(cur < drumBassHits.length && drumBassHits[cur] < lbound){// passes all hits that are before lbound
               cur++;
               wrong_spaces++;
@@ -107,13 +109,14 @@ wss.on('connection', (ws) => {
             let l = cur, r = cur;
             while(r < drumBassHits.length && drumBassHits[r] < rbound){// moves r such that [l, r) covers all notes in the interval
               r++;
+              console.log(drumBassHits[r] * bpmMultiplier);
             }
             if(r - l === 1){// if only one note exists in the interval
-              bassScore += 7;
+              bassScore += 9;
             }
             cur = r;// moves cur to next possible position
           }
-          bassScore -= wrong_spaces * 2;
+          //bassScore -= wrong_spaces * 2;
           score += Math.max(0, bassScore);
 
           // piano
@@ -122,7 +125,7 @@ wss.on('connection', (ws) => {
             cur++;
           }
           for (var i = 0; i < pianoAns.length; i++){// traverse through all the 
-            let lbound = pianoAns[i].time - 62, rbound = pianoAns[i].time + 62;
+            let lbound = pianoAns[i].time * bpmMultiplier - 62 * bpmMultiplier, rbound = pianoAns[i].time * bpmMultiplier + 62 * bpmMultiplier;
             while(cur < pianoHits.length && pianoHits[cur].time < lbound){// passes all hits that are before lbound
               cur++;
               wrong_spaces++;
@@ -135,11 +138,11 @@ wss.on('connection', (ws) => {
               r++;
             }
             if(r - l === 1 && pianoHits[l].note === pianoAns[i].note){// if only one note exists in the interval and note is right
-              pianoScore += 7;
+              pianoScore += 9;
             }
             cur = r;// moves cur to next possible position
           }
-          pianoScore -= wrong_spaces * 2;
+          //pianoScore -= wrong_spaces * 2;
           score += Math.max(0, pianoScore);
 
           // guitar
@@ -148,7 +151,7 @@ wss.on('connection', (ws) => {
             cur++;
           }
           for (var i = 0; i < guitarAns.length; i++){// traverse through all the 
-            let lbound = guitarAns[i].time - 62, rbound = guitarAns[i].time + 62;
+            let lbound = guitarAns[i].time * bpmMultiplier - 62 * bpmMultiplier, rbound = guitarAns[i].time * bpmMultiplier + 62 * bpmMultiplier;
             while(cur < guitarHits.length && guitarHits[cur].time < lbound){// passes all hits that are before lbound
               cur++;
               wrong_spaces++;
@@ -161,15 +164,21 @@ wss.on('connection', (ws) => {
               r++;
             }
             if(r - l === 1 && guitarHits[l].chord === guitarAns[i].chord){// if only one note exists in the interval and note is right
-              guitarScore += 7;
+              guitarScore += 9;
             }
             cur = r;// moves cur to next possible position
           }
-          guitarScore -= wrong_spaces * 2;
+          //guitarScore -= wrong_spaces * 2;
           score += Math.max(0, guitarScore);
-
+          
+          if(bpmMultiplier === 1.5){
+              score *= 0.8;
+          }
+          else if(bpmMultiplier === 2){
+              score *= 0.6;
+          }
           // ======================================
-
+          score = Math.ceil(score);
           if (hostSocket) {
             broadcastExceptHost({
               type: "score",
@@ -209,12 +218,19 @@ wss.on('connection', (ws) => {
             type: "replay-data",
             data: replayData
           });
+        } else if (data.type === "play-sample"){
+          console.log("Play sample requested,");
+          bpmMultiplier = data.data;
+          broadcastExceptHost({
+            type: "play-sample",
+            data: bpmMultiplier
+          });
         }
 
         return;
       }
       
-      recordingStartTime = startAt + 4500;
+      recordingStartTime = startAt + 9 * 500 * bpmMultiplier;
       // Handle client messages
       if (recording) {
         if (data.playerId === "drummer") {
