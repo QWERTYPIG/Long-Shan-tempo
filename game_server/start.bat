@@ -12,6 +12,6 @@ if errorlevel 1 (
 
 REM Start Python HTTP server on port 8000
 
-echo Starting local server at http://localhost:8000
-start http://localhost:8000
-python -m http.server 8000
+echo Starting local server at http://localhost:8001
+start http://localhost:8001
+python -m http.server 8001

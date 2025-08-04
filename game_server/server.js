@@ -83,7 +83,7 @@ wss.on('connection', (ws) => {
               r++;
             }
             if(r - l === 1){// if only one note exists in the interval
-              snareScore += 5;
+              snareScore += 7;
             }
             cur = r;// moves cur to next possible position
           }
@@ -109,7 +109,7 @@ wss.on('connection', (ws) => {
               r++;
             }
             if(r - l === 1){// if only one note exists in the interval
-              bassScore += 5;
+              bassScore += 7;
             }
             cur = r;// moves cur to next possible position
           }
@@ -135,7 +135,7 @@ wss.on('connection', (ws) => {
               r++;
             }
             if(r - l === 1 && pianoHits[l].note === pianoAns[i].note){// if only one note exists in the interval and note is right
-              pianoScore += 5;
+              pianoScore += 7;
             }
             cur = r;// moves cur to next possible position
           }
@@ -161,7 +161,7 @@ wss.on('connection', (ws) => {
               r++;
             }
             if(r - l === 1 && guitarHits[l].chord === guitarAns[i].chord){// if only one note exists in the interval and note is right
-              guitarScore += 5;
+              guitarScore += 7;
             }
             cur = r;// moves cur to next possible position
           }
@@ -171,10 +171,10 @@ wss.on('connection', (ws) => {
           // ======================================
 
           if (hostSocket) {
-            hostSocket.send(JSON.stringify({
+            broadcastExceptHost({
               type: "score",
               value: score
-            }));
+            });
           }
 
         } else if (data.type === "reset") {
@@ -205,10 +205,10 @@ wss.on('connection', (ws) => {
 
         } else if (data.type === "replay-request" && ws === hostSocket) {
           console.log("Replay requested.");
-          ws.send(JSON.stringify({
+          broadcastExceptHost({
             type: "replay-data",
             data: replayData
-          }));
+          });
         }
 
         return;

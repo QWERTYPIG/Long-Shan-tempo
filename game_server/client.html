@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Multi-Instrument Client</title>
+  <style>
+    body {
+      background: #333;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
+    .instrument-container {
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      margin: 20px;
+    }
+    #keyboard {
+      display: flex;
+      position: relative;
+      margin: 20px auto;
+      width: max-content;
+    }
+    .white-key, .black-key {
+      position: relative;
+      border: 1px solid #111;
+      cursor: pointer;
+      user-select: none;
+    }
+    .white-key {
+      width: 80px;
+      height: 400px;
+      background: white;
+      z-index: 1;
+    }
+    .black-key {
+      width: 60px;
+      height: 240px;
+      background: black;
+      margin-left: -30px;
+      margin-right: -30px;
+      z-index: 2;
+    }
+    .key.pressed {
+      box-shadow: 0 0 10px yellow;
+      filter: brightness(1.2);
+    }
+    .label {
+      font-size: 10px;
+      position: absolute;
+      bottom: 5px;
+      width: 100%;
+      text-align: center;
+      color: #000;
+    }
+    .black-key .label {
+      color: white;
+    }
+    .drum {
+      margin-top: 75px;
+    }
+    .drum-section {
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        margin-top: 20px;
+    }
+    .drum img {
+      width: 250px;
+      height: 250px;
+      background: white;
+    }
+    .drum.hit img {
+      transform: scale(1.1);
+      filter: brightness(1.5);
+    }
+    .guitar-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 10px;
+      margin: 20px;
+    }
+    .guitar-chord img {
+      width: 200px;
+      height: 200px;
+      background: white;
+      border: 2px solid transparent;
+    }
+    .guitar-chord.selected img {
+      border-color: yellow;
+    }
+  </style>
+</head>
+<body>
+  <h1>Multi-Instrument Client</h1>
+  <p>Press keys to play piano, drum, and guitar. Timing sent to server.</p>
+
+  <div id="keyboard"></div>
+
+  <div class="instrument-container">
+    <div class="drum-section"> 
+        <div class="drum" id="snare">
+        <img src="assets/snare.png" alt="Snare Drum">
+        <p>Snare Drum (t / i)</p>
+        </div>
+        <div class="drum" id="bass">
+        <img src="assets/bass.png" alt="Bass Drum">
+        <p>Bass Drum (9)</p>
+        </div>
+    </div>
+    <div class="guitar-grid">
+      <div class="guitar-chord" data-chord="1"><img src="assets/images/chord1.png" alt="Chord 1"></div>
+      <div class="guitar-chord" data-chord="2"><img src="assets/images/chord2.png" alt="Chord 2"></div>
+      <div class="guitar-chord" data-chord="3"><img src="assets/images/chord3.png" alt="Chord 3"></div>
+      <div class="guitar-chord" data-chord="4"><img src="assets/images/chord4.png" alt="Chord 4"></div>
+      <div class="guitar-chord" data-chord="5"><img src="assets/images/chord5.png" alt="Chord 5"></div>
+      <div class="guitar-chord" data-chord="6"><img src="assets/images/chord6.png" alt="Chord 6"></div>
+      <div class="guitar-chord" data-chord="7"><img src="assets/images/chord7.png" alt="Chord 7"></div>
+      <div class="guitar-chord" data-chord="8"><img src="assets/images/chord8.png" alt="Chord 8"></div>
+    </div>
+  </div>
+
+  <script>
+    const socket = new WebSocket("ws://localhost:8080");
+
+    const keyMap = {
+      'z': 'F7', 'x': 'G7', 'c': 'A7', 'v': 'B7',
+      'b': 'C8', 'n': 'D8', 'm': 'E8',
+      ',': 'F8', '.': 'G8', '/': 'A8',
+      's': 'F7s', 'd': 'G7s', 'f': 'A7s',
+      'h': 'C8s', 'j': 'D8s', 'l': 'F8s', ';': 'G8s'
+    };
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffers = {};
+    const pressTimes = {};
+    const pressedKeys = new Set();
+    let currentChord = 1;
+
+    async function loadAudio(name, path) {
+      const res = await fetch(path);
+      const buffer = await res.arrayBuffer();
+      audioBuffers[name] = await audioCtx.decodeAudioData(buffer);
+    }
+
+    async function loadAllAudio() {
+      for (const note of Object.values(keyMap)) {
+        await loadAudio(note, `assets/audio/${note}.wav`);
+      }
+      await loadAudio("bass", "assets/bass.wav");
+      await loadAudio("snare", "assets/snare.wav");
+      for (let i = 1; i <= 8; i++) {
+        await loadAudio(`chord${i}`, `assets/audio/chord${i}.wav`);
+      }
+    }
+
+    function playAudio(name) {
+      const buffer = audioBuffers[name];
+      if (!buffer) return;
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.start();
+    }
+
+    function highlightKey(note, pressed) {
+      document.querySelectorAll(`[data-note="${note}"]`).forEach(el => {
+        el.classList.toggle('pressed', pressed);
+      });
+    }
+
+    const keyboard = document.getElementById("keyboard");
+    const whiteKeyOrder = ['F7','G7','A7','B7','C8','D8','E8','F8','G8','A8'];
+    const blackKeyInsertMap = {
+      0: 'F7s', 1: 'G7s', 2: 'A7s',
+      4: 'C8s', 5: 'D8s', 7: 'F8s', 8: 'G8s'
+    };
+
+    whiteKeyOrder.forEach(note => {
+      const keyDiv = document.createElement("div");
+      keyDiv.className = "white-key key";
+      keyDiv.dataset.note = note;
+      keyDiv.innerHTML = `<div class="label">${note}</div>`;
+      keyboard.appendChild(keyDiv);
+    });
+
+    const whiteKeys = keyboard.getElementsByClassName('white-key');
+    Object.entries(blackKeyInsertMap).forEach(([pos, note]) => {
+      const keyDiv = document.createElement("div");
+      keyDiv.className = "black-key key";
+      keyDiv.dataset.note = note;
+      keyboard.insertBefore(keyDiv, whiteKeys[parseInt(pos) + 1]);
+    });
+
+    const bass = document.getElementById("bass");
+    const snare = document.getElementById("snare");
+
+    function animate(el) {
+      el.classList.add("hit");
+      setTimeout(() => el.classList.remove("hit"), 100);
+    }
+
+    document.addEventListener('keydown', async (e) => {
+      if (audioCtx.state !== "running") await audioCtx.resume();
+      const key = e.key.toLowerCase();
+      const time = Date.now();
+
+      // Piano
+      if (keyMap[key] && !pressedKeys.has(key)) {
+        pressedKeys.add(key);
+        const note = keyMap[key];
+        pressTimes[note] = time;
+        playAudio(note);
+        highlightKey(note, true);
+        socket.send(JSON.stringify({ playerId: "pianist", note, pressTime: time, releaseTime: time }));
+      }
+
+      // Drum
+      if (key === '9') {
+        playAudio("bass");
+        animate(bass);
+        socket.send(JSON.stringify({ playerId: "drummer", action: "bass", clientTime: time }));
+      }
+      if (key === 't' || key === 'i') {
+        playAudio("snare");
+        animate(snare);
+        socket.send(JSON.stringify({ playerId: "drummer", action: "snare", clientTime: time }));
+      }
+
+      // Guitar chord select
+      if (key >= '1' && key <= '8') {
+        currentChord = parseInt(key);
+        document.querySelectorAll(".guitar-chord").forEach(el => {
+          el.classList.toggle("selected", parseInt(el.dataset.chord) === currentChord);
+        });
+      }
+      if (key === ' ') {
+        playAudio(`chord${currentChord}`);
+        const chordEl = document.querySelector(`.guitar-chord[data-chord="${currentChord}"]`);
+        if (chordEl) animate(chordEl);
+        socket.send(JSON.stringify({ playerId: "guitarist", chord: currentChord, clientTime: time }));
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (keyMap[key]) {
+        const note = keyMap[key];
+        highlightKey(note, false);
+        pressedKeys.delete(key);
+      }
+    });
+
+    socket.addEventListener('open', () => console.log("🎹 Client connected"));
+    socket.addEventListener('close', () => console.log("Disconnected"));
+    loadAllAudio();
+  </script>
+</body>
+</html>

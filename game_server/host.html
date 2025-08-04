@@ -49,7 +49,7 @@
   <div id="scoreDisplay">Waiting for score...</div>
 
   <script>
-    const socket = new WebSocket("ws://172.27.120.175:8080");
+    const socket = new WebSocket("ws://localhost:8080");
     const scoreDisplay = document.getElementById("scoreDisplay");
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -80,15 +80,15 @@
     };
 
     async function loadReplayAudio() {
-      loadAudio("metronome", "http://localhost:8000/assets/audio/metronome.wav");
-      loadAudio("metronomeMain", "http://localhost:8000/assets/audio/metronome_main.wav");
-      await loadAudio("bass", "http://localhost:8000/assets/bass.wav");
-      await loadAudio("snare", "http://localhost:8000/assets/snare.wav");
+      loadAudio("metronome", "assets/audio/metronome.wav");
+      loadAudio("metronomeMain", "assets/audio/metronome_main.wav");
+      await loadAudio("bass", "assets/bass.wav");
+      await loadAudio("snare", "assets/snare.wav");
       for (const note of Object.values(keyMap)) {
-        loadAudio(note, `http://localhost:8000/assets/audio/${note}.wav`);
+        loadAudio(note, `assets/audio/${note}.wav`);
       }
       for(let i = 1; i <= 8; i++){
-        loadAudio(`chord${i}`, `http://localhost:8000/assets/audio/chord${i}.wav`);
+        loadAudio(`chord${i}`, `assets/audio/chord${i}.wav`);
       }
       console.log("Audio loaded");
     }
@@ -122,7 +122,6 @@
 
       const interval = setInterval(() => {
         // Show countdown on screen if desired
-        console.log(sequence[count]);
 
         if (count === 1 || count ===3 || count === 5) {
           playAudio("metronomeMain");
