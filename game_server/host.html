@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Rhythm Game Host</title>
+  <style>
+    body {
+      background-color: #222;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px;
+    }
+
+    button {
+      font-size: 20px;
+      padding: 10px 30px;
+      margin: 20px;
+      border-radius: 8px;
+      border: none;
+      background-color: #444;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: #666;
+    }
+
+    #scoreDisplay {
+      margin-top: 40px;
+      font-size: 32px;
+      font-weight: bold;
+      color: yellow;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rhythm Challenge – Host Panel</h1>
+
+  <div>
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
+    <button id="resetBtn">Reset</button>
+    <button id="requestReplay">Replay</button>
+  </div>
+
+  <div id="scoreDisplay">Waiting for score...</div>
+
+  <script>
+    const socket = new WebSocket("ws://172.27.120.175:8080");
+    const scoreDisplay = document.getElementById("scoreDisplay");
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffers = {};
+
+    async function loadAudio(name, path) {
+      const res = await fetch(path);
+      const buffer = await res.arrayBuffer();
+      audioBuffers[name] = await audioCtx.decodeAudioData(buffer);
+    }
+
+    function playAudio(name) {
+      const buffer = audioBuffers[name];
+      if (!buffer) return;
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.start();
+    }
+
+    const keyMap = {
+      'z': 'F7',  'x': 'G7',  'c': 'A7',  'v': 'B7',
+      'b': 'C8',  'n': 'D8',  'm': 'E8',
+      ',': 'F8',  '.': 'G8',  '/': 'A8',
+      's': 'F7s', 'd': 'G7s', 'f': 'A7s',
+      'h': 'C8s', 'j': 'D8s',
+      'l': 'F8s', ';': 'G8s'
+    };
+
+    async function loadReplayAudio() {
+      console.log("Audio loaded");
+      await loadAudio("bass", "http://localhost:8000/assets/bass.wav");
+      await loadAudio("snare", "http://localhost:8000/assets/snare.wav");
+      for (const note of Object.values(keyMap)) {
+        loadAudio(note, `http://localhost:8000/assets/audio/${note}.wav`);
+      }
+      for(let i = 1; i <= 8; i++){
+        loadAudio(`chord${i}`, `http://localhost:8000/assets/audio/chord${i}.wav`);
+      }
+    }
+
+    function replayAll(data) {
+      //const start = performance.now();
+
+      // Drum
+      data.drum.snare.forEach(t =>
+        setTimeout(() => playAudio("snare"), t)
+      );
+      data.drum.bass.forEach(t =>
+        setTimeout(() => playAudio("bass"), t)
+      );
+
+      // Piano
+      data.piano.forEach(ev =>
+        setTimeout(() => playAudio(ev.note), ev.time)
+      );
+
+      // Guitar
+      data.guitar.forEach(ev =>
+        setTimeout(() => playAudio(`chord${ev.chord}`), ev.time)
+      );
+    }
+
+    socket.addEventListener('open', () => {
+      console.log("🧠 Host connected to server");
+    });
+
+    document.getElementById("startBtn").addEventListener("click", () => {
+      socket.send(JSON.stringify({ type: "start" }));
+      scoreDisplay.textContent = "Game started...";
+    });
+
+    document.getElementById("stopBtn").addEventListener("click", () => {
+      socket.send(JSON.stringify({ type: "stop" }));
+      scoreDisplay.textContent = "Waiting for score...";
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      socket.send(JSON.stringify({ type: "reset" }));
+      scoreDisplay.textContent = "Score reset.";
+    });
+
+    document.getElementById("requestReplay").addEventListener("click", () => {
+      socket.send(JSON.stringify({ type: "replay-request" }));
+      scoreDisplay.textContent = "Replay request sent.";
+    });
+
+    socket.addEventListener("message", (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === "score") {
+        scoreDisplay.textContent = `Final Score: ${msg.value}`;
+      }
+      if (msg.type === "replay-data") {
+        scoreDisplay.textContent = "Replaying...";
+        replayAll(msg.data);
+      }
+    });
+
+    socket.addEventListener("close", () => {
+      console.log("❌ Host disconnected");
+      scoreDisplay.textContent = "Disconnected from server";
+    });
+
+    loadReplayAudio();
+  </script>
+</body>
+</html>
+

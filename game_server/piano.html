@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>鋼琴 Piano</title>
+  <style>
+    body {
+      background: #333;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
+
+    #keyboard {
+      display: flex;
+      position: relative;
+      margin: 50px auto;
+      width: max-content;
+    }
+
+    .white-key, .black-key {
+      position: relative;
+      border: 1px solid #111;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .white-key {
+      width: 40px;
+      height: 200px;
+      background: white;
+      z-index: 1;
+    }
+
+    .black-key {
+      width: 30px;
+      height: 120px;
+      background: black;
+      margin-left: -15px;
+      margin-right: -15px;
+      z-index: 2;
+    }
+
+    .key.pressed {
+      box-shadow: 0 0 10px yellow;
+      filter: brightness(1.2);
+    }
+
+    .label {
+      font-size: 10px;
+      position: absolute;
+      bottom: 5px;
+      width: 100%;
+      text-align: center;
+      color: #000;
+    }
+
+    .black-key .label {
+      color: white;
+    }
+
+    #countdown {
+      position: fixed;
+      top: 20px;
+      right: 40px;
+      font-size: 60px;
+      font-weight: bold;
+      color: yellow;
+      display: none;
+      z-index: 99;
+    }
+  </style>
+</head>
+<body>
+  <h1>鋼琴 Piano</h1>
+  <p>在鍵盤上按下琴鍵上的字元以演奏對應音符</p>
+  <p>Hit the keys labeled on the piano to play the corresponding note</p>
+
+  <div id="keyboard"></div>
+  <div id="countdown">4</div>
+
+  <script>
+    const socket = new WebSocket("ws://172.27.120.175:8080");
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffers = {};
+    async function loadAudio(note, url) {
+      const res = await fetch(url);
+      const arrayBuffer = await res.arrayBuffer();
+      audioBuffers[note] = await audioCtx.decodeAudioData(arrayBuffer);
+    }
+
+    const keyMap = {
+      'z': 'F7',  'x': 'G7',  'c': 'A7',  'v': 'B7',
+      'b': 'C8',  'n': 'D8',  'm': 'E8',
+      ',': 'F8',  '.': 'G8',  '/': 'A8',
+      's': 'F7s', 'd': 'G7s', 'f': 'A7s',
+      'h': 'C8s', 'j': 'D8s',
+      'l': 'F8s', ';': 'G8s'
+    };
+
+    const audioMap = {};
+    const pressTimes = {};
+    const pressedKeys = new Set();
+
+    const keyboard = document.getElementById("keyboard");
+    const countdown = document.getElementById("countdown");
+    loadAudio("metronome", "http://localhost:8000/assets/audio/metronome.wav");
+    loadAudio("metronomeMain", "http://localhost:8000/assets/audio/metronome_main.wav");
+
+    let recording = false;
+    let startTime = null;
+
+    const whiteKeyOrder = [{note: 'F7', key: 'Z'},{note: 'G7', key: 'X'},{note: 'A7', key: 'C'},{note: 'B7', key: 'V'},{note: 'C8', key: 'B'},{note: 'D8', key: 'N'},{note: 'E8', key: 'M'},{note: 'F8', key : ','},{note: 'G8', key: '.'},{note: 'A8', key: '/'}];
+    const blackKeyInsertMap = {
+      0: {note: 'F7s', key: 'S'}, 1: {note: 'G7s', key: 'D'}, 2: {note: 'A7s', key: 'F'},
+      4: {note: 'C8s', key: 'H'}, 5: {note: 'D8s', key: 'J'}, 7: {note: 'F8s', key: 'L'}, 8: {note: 'G8s', key: ';'}
+    };
+
+    whiteKeyOrder.forEach(data => {
+      const keyDiv = document.createElement("div");
+      keyDiv.className = "white-key key";
+      keyDiv.dataset.note = data.note;
+      const label = document.createElement("div");
+      label.className = "label";
+      label.innerText = `${data.key}\n${data.note}`;
+      keyDiv.append(label);
+      keyboard.appendChild(keyDiv);
+    });
+
+    const whiteKeys = keyboard.getElementsByClassName('white-key');
+    Object.entries(blackKeyInsertMap).forEach(([pos, data]) => {
+      const keyDiv = document.createElement("div");
+      keyDiv.className = "black-key key";
+      keyDiv.dataset.note = data.note;
+      const label = document.createElement("div");
+      label.className = "label";
+      label.innerText = `${data.key}`;
+      keyDiv.append(label);
+      keyboard.insertBefore(keyDiv, whiteKeys[parseInt(pos) + 1]);
+    });
+
+    (async function loadAudioBuffers() {
+      for (const note of Object.values(keyMap)) {
+        loadAudio(note, `http://localhost:8000/assets/audio/${note}.wav`);
+      }
+    })();
+
+    function playNote(note) {
+      const buffer = audioBuffers[note];
+      if (!buffer) return;
+
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.start();
+    }
+
+    function highlightKey(note, pressed) {
+      document.querySelectorAll(`[data-note="${note}"]`).forEach(el => {
+        el.classList.toggle('pressed', pressed);
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (!keyMap[key] || pressedKeys.has(key)) return;
+      pressedKeys.add(key);
+
+      const note = keyMap[key];
+      const time = Date.now();
+      pressTimes[note] = time;
+
+      playNote(note);
+      highlightKey(note, true);
+    });
+
+    document.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (!keyMap[key]) return;
+      pressedKeys.delete(key);
+
+      const note = keyMap[key];
+      const releaseTime = Date.now();
+      const pressTime = pressTimes[note] || releaseTime;
+
+      highlightKey(note, false);
+      socket.send(JSON.stringify({
+        playerId: "pianist",
+        note,
+        pressTime,
+        releaseTime,
+        clientTime: pressTime  // Ensures compatibility with server
+      }));
+
+      delete pressTimes[note];
+    });
+
+    function runCountdown() {
+      let count = 0;
+      const sequence = ["Ready?", "1", "2", "3", "4"];
+      
+      socket.send(JSON.stringify({
+        type: "ready",
+        playerId: "pianist", // drummer / pianist / guitarist
+        readyTime: Date.now()
+      }));
+      
+      const interval = setInterval(() => {
+        countdown.style.display = "block";
+        countdown.textContent = sequence[count];
+
+        count++;
+        if(count > 2)playNote("metronome");
+        else if(count === 2)playNote("metronomeMain");
+        if (count === sequence.length) {
+          clearInterval(interval);
+          setTimeout(() => {
+            countdown.style.display = "none";
+            recording = true;
+            //startTime = Date.now();
+          }, 500);
+        }
+      }, 500);
+    }
+
+    socket.addEventListener('message', (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "startAt") {
+        const wait = msg.startAt - Date.now();
+        if (wait < 0) {
+          console.warn("⚠️ Missed start time, starting immediately");
+          runCountdown();
+        } else {
+          setTimeout(runCountdown, wait);
+        }
+      } else if (msg.type === "stop") {
+        recording = false;
+      } else if (msg.type === "reset") {
+        recording = false;
+        startTime = null;
+        countdown.style.display = "none";
+      }
+    });
+
+    socket.addEventListener('open', () => console.log("Connected to host"));
+    socket.addEventListener('close', () => console.log("Disconnected from host"));
+  </script>
+</body>
+</html>
+
