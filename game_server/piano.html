@@ -228,12 +228,12 @@
       const msg = JSON.parse(event.data);
       if (msg.type === "startAt") {
         const wait = msg.startAt - Date.now();
-        if (wait < 0) {
+        /*if (wait < 0) {
           console.warn("⚠️ Missed start time, starting immediately");
           runCountdown();
         } else {
           setTimeout(runCountdown, wait);
-        }
+        }*/
       } else if (msg.type === "stop") {
         recording = false;
       } else if (msg.type === "reset") {

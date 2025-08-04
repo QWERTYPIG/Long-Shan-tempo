@@ -66,7 +66,7 @@ wss.on('connection', (ws) => {
           let score = 0, snareScore = 0, bassScore = 0, pianoScore = 0, guitarScore = 0;
           // snare
           let cur = 0, wrong_spaces = 0;
-          while (cur < drumSnareHits.length && drumSnareHits[cur] >= 50000){
+          while (cur < drumSnareHits.length && drumSnareHits[cur] <= -62){
             cur++;
           }
           for (var i = 0; i < drumSnareAns.length; i++){// traverse through all the 
@@ -92,7 +92,7 @@ wss.on('connection', (ws) => {
 
           // bass
           cur = 0, wrong_spaces = 0;
-          while (cur < drumBassHits.length && drumBassHits[cur] >= 50000){
+          while (cur < drumBassHits.length && drumBassHits[cur] <= -62){
             cur++;
           }
           for (var i = 0; i < drumBassAns.length; i++){// traverse through all the 
@@ -118,7 +118,7 @@ wss.on('connection', (ws) => {
 
           // piano
           cur = 0, wrong_spaces = 0;
-          while (cur < pianoHits.length && pianoHits[cur].time >= 50000){
+          while (cur < pianoHits.length && pianoHits[cur].time <= -62){
             cur++;
           }
           for (var i = 0; i < pianoAns.length; i++){// traverse through all the 
@@ -144,7 +144,7 @@ wss.on('connection', (ws) => {
 
           // guitar
           cur = 0, wrong_spaces = 0;
-          while (cur < guitarHits.length && guitarHits[cur].time >= 50000){
+          while (cur < guitarHits.length && guitarHits[cur].time <= -62){
             cur++;
           }
           for (var i = 0; i < guitarAns.length; i++){// traverse through all the 
@@ -214,7 +214,7 @@ wss.on('connection', (ws) => {
         return;
       }
       
-      recordingStartTime = startAt + 3000;
+      recordingStartTime = startAt + 4500;
       // Handle client messages
       if (recording) {
         if (data.playerId === "drummer") {
@@ -271,7 +271,7 @@ wss.on('connection', (ws) => {
 function broadcastExceptHost(message) {
   const msgStr = JSON.stringify(message);
   for (const client of clients) {
-    if (client !== hostSocket && client.readyState === WebSocket.OPEN) {
+    if (client.readyState === WebSocket.OPEN) {
       client.send(msgStr);
     }
   }

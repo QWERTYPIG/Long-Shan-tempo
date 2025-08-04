@@ -80,7 +80,8 @@
     };
 
     async function loadReplayAudio() {
-      console.log("Audio loaded");
+      loadAudio("metronome", "http://localhost:8000/assets/audio/metronome.wav");
+      loadAudio("metronomeMain", "http://localhost:8000/assets/audio/metronome_main.wav");
       await loadAudio("bass", "http://localhost:8000/assets/bass.wav");
       await loadAudio("snare", "http://localhost:8000/assets/snare.wav");
       for (const note of Object.values(keyMap)) {
@@ -89,6 +90,7 @@
       for(let i = 1; i <= 8; i++){
         loadAudio(`chord${i}`, `http://localhost:8000/assets/audio/chord${i}.wav`);
       }
+      console.log("Audio loaded");
     }
 
     function replayAll(data) {
@@ -111,6 +113,48 @@
       data.guitar.forEach(ev =>
         setTimeout(() => playAudio(`chord${ev.chord}`), ev.time)
       );
+    }
+
+    let hostBeatLoop = null;
+
+    function startHostCountdown() {
+      let count = 1;
+
+      const interval = setInterval(() => {
+        // Show countdown on screen if desired
+        console.log(sequence[count]);
+
+        if (count === 1 || count ===3 || count === 5) {
+          playAudio("metronomeMain");
+        } else if (count > 5) {
+          playAudio("metronome");
+        }
+
+        count++;
+        if (count === 9) {
+          clearInterval(interval);
+          startHostBeatLoop();
+        }
+      }, 500);
+    }
+
+    function startHostBeatLoop() {
+      let beat = 0;
+      hostBeatLoop = setInterval(() => {
+        if (beat % 4 === 0) {
+          playAudio("metronomeMain");
+        } else {
+          playAudio("metronome");
+        }
+        beat++;
+      }, 500);
+    }
+
+    function stopHostBeatLoop() {
+      if (hostBeatLoop) {
+        clearInterval(hostBeatLoop);
+        hostBeatLoop = null;
+      }
     }
 
     socket.addEventListener('open', () => {
@@ -146,6 +190,24 @@
       if (msg.type === "replay-data") {
         scoreDisplay.textContent = "Replaying...";
         replayAll(msg.data);
+      }
+      if (msg.type === "startAt") {
+        const wait = msg.startAt - Date.now();
+        console.log("received");
+        if (wait < 0) {
+          console.warn("Missed start time, starting immediately");
+          startHostCountdown();
+        } else {
+          setTimeout(startHostCountdown, wait);
+        }
+      }
+
+      if (msg.type === "stop") {
+        stopHostBeatLoop();
+      }
+
+      if (msg.type === "reset") {
+        stopHostBeatLoop();
       }
     });
 
